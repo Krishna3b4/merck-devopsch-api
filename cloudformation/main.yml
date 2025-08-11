@@ -11,7 +11,7 @@ Parameters:
   ImageURI:
     Type: String
     Description: ECR image URI for the application
-    Default: "495762952500.dkr.ecr.us-east-1.amazonaws.com/merck-devopsch-api:latest"
+    Default: "495762952500.dkr.ecr.us-east-1.amazonaws.com/d-devops-challenge-ecr-repo:latest"
 
 Resources:
   NetworkStack:

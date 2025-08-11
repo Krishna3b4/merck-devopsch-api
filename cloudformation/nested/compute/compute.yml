@@ -10,13 +10,13 @@ Parameters:
   ImageURI:
     Type: String
     Description: ECR image URI
-    Default: "495762952500.dkr.ecr.us-east-1.amazonaws.com/merck-devopsch-api:latest"
+    Default: "495762952500.dkr.ecr.us-east-1.amazonaws.com/d-devops-challenge-ecr-repo:latest"
 
 Resources:
   ECSCluster:
     Type: AWS::ECS::Cluster
     Properties:
-      ClusterName: !Sub ${Environment}-merck-cluster
+      ClusterName: !Sub d-devops-challenge-ecs-cluster
       CapacityProviders:
         - FARGATE
       DefaultCapacityProviderStrategy:
@@ -39,7 +39,7 @@ Resources:
   TaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
-      Family: !Sub ${Environment}-merck-api
+      Family: !Sub d-devops-challenge-task-definition
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
@@ -67,7 +67,7 @@ Resources:
   LogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub /ecs/${Environment}-merck-api
+      LogGroupName: !Sub /ecs/d-devops-challenge-api
       RetentionInDays: 7
 
   SecurityGroup:
@@ -75,7 +75,7 @@ Resources:
     Properties:
       GroupDescription: Security group for ECS service
       VpcId:
-        Fn::ImportValue: !Sub ${Environment}-VPC-ID
+        Fn::ImportValue: !Sub d-devops-challenge-vpc-id
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 8000
@@ -87,7 +87,7 @@ Resources:
     Properties:
       GroupDescription: Security group for ALB
       VpcId:
-        Fn::ImportValue: !Sub ${Environment}-VPC-ID
+        Fn::ImportValue: !Sub d-devops-challenge-vpc-id
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 80
@@ -97,23 +97,23 @@ Resources:
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub ${Environment}-merck-alb
+      Name: !Sub d-devops-challenge-alb
       Scheme: internet-facing
       Type: application
       Subnets:
-        - Fn::ImportValue: !Sub ${Environment}-PublicSubnet1-ID
-        - Fn::ImportValue: !Sub ${Environment}-PublicSubnet2-ID
+        - Fn::ImportValue: !Sub d-devops-challenge-public-subnet1-id
+        - Fn::ImportValue: !Sub d-devops-challenge-public-subnet2-id
       SecurityGroups:
         - !Ref ALBSecurityGroup
 
   TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub ${Environment}-merck-tg
+      Name: !Sub d-devops-challenge-target-group
       Port: 8000
       Protocol: HTTP
       VpcId:
-        Fn::ImportValue: !Sub ${Environment}-VPC-ID
+        Fn::ImportValue: !Sub d-devops-challenge-vpc-id
       TargetType: ip
       HealthCheckPath: /health
       HealthCheckProtocol: HTTP
@@ -135,7 +135,7 @@ Resources:
     Type: AWS::ECS::Service
     DependsOn: Listener
     Properties:
-      ServiceName: !Sub ${Environment}-merck-service
+      ServiceName: !Sub d-devops-challenge-ecs-service
       Cluster: !Ref ECSCluster
       TaskDefinition: !Ref TaskDefinition
       DesiredCount: 1
@@ -145,8 +145,8 @@ Resources:
           SecurityGroups:
             - !Ref SecurityGroup
           Subnets:
-            - Fn::ImportValue: !Sub ${Environment}-PublicSubnet1-ID
-            - Fn::ImportValue: !Sub ${Environment}-PublicSubnet2-ID
+            - Fn::ImportValue: !Sub d-devops-challenge-public-subnet1-id
+            - Fn::ImportValue: !Sub d-devops-challenge-public-subnet2-id
           AssignPublicIp: ENABLED
       LoadBalancers:
         - ContainerName: api

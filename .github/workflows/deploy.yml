@@ -3,6 +3,8 @@ name: Deploy Backend
 on:
   push:
     branches: [ main ]
+  pull_request:
+    branches: [ main ]
   workflow_dispatch:
     inputs:
       environment:
@@ -14,13 +16,89 @@ on:
         - dev
         - staging
         - prod
+      force_full_deploy:
+        description: 'Force full deployment'
+        required: false
+        default: false
+        type: boolean
 
 env:
   AWS_REGION: us-east-1
   ENVIRONMENT: ${{ github.event.inputs.environment || 'dev' }}
 
 jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      infra-changed: ${{ steps.changes.outputs.infra }}
+      app-changed: ${{ steps.changes.outputs.app }}
+      deploy-needed: ${{ steps.changes.outputs.deploy }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dorny/paths-filter@v2
+        id: changes
+        with:
+          filters: |
+            infra:
+              - 'cloudformation/**'
+              - 'deploy-*.yml'
+            app:
+              - 'app/**'
+              - 'requirements.txt'
+              - 'Dockerfile'
+            deploy:
+              - 'cloudformation/**'
+              - 'app/**'
+              - 'requirements.txt'
+              - 'Dockerfile'
+              - '.github/workflows/**'
+
+  lint-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - name: Install linting tools
+        run: |
+          pip install flake8 black isort bandit safety
+          pip install cfn-lint
+      - name: Python code formatting check
+        run: |
+          black --check app/ || (echo "❌ Code formatting issues found. Run 'black app/' to fix." && exit 1)
+      - name: Python import sorting check
+        run: |
+          isort --check-only app/ || (echo "❌ Import sorting issues found. Run 'isort app/' to fix." && exit 1)
+      - name: Python linting
+        run: |
+          flake8 app/ --max-line-length=88 --extend-ignore=E203,W503
+      - name: Security scan
+        run: |
+          bandit -r app/ -f json -o bandit-report.json || true
+          bandit -r app/
+      - name: Dependency security check
+        run: |
+          safety check --json --output safety-report.json || true
+          safety check
+      - name: CloudFormation linting
+        run: |
+          cfn-lint cloudformation/**/*.yml
+      - name: Upload security reports
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: security-reports
+          path: |
+            bandit-report.json
+            safety-report.json
+
   deploy-infrastructure:
+    needs: [detect-changes, lint-and-validate]
+    if: needs.detect-changes.outputs.infra-changed == 'true' || github.event.inputs.force_full_deploy == 'true' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     outputs:
       ecr-uri: ${{ steps.deploy-infra.outputs.ecr-uri }}
@@ -36,8 +114,8 @@ jobs:
         id: deploy-infra
         run: |
           # Create ECR repository first
-          aws ecr describe-repositories --repository-names merck-devopsch-api || \
-          aws ecr create-repository --repository-name merck-devopsch-api
+          aws ecr describe-repositories --repository-names d-devops-challenge-ecr-repo || \
+          aws ecr create-repository --repository-name d-devops-challenge-ecr-repo
           
           # Package and deploy network stack
           aws cloudformation package \
@@ -47,17 +125,22 @@ jobs:
           
           aws cloudformation deploy \
             --template-file packaged-network.yml \
-            --stack-name ${{ env.ENVIRONMENT }}-merck-network \
+            --stack-name d-devops-challenge-network \
             --parameter-overrides Environment=${{ env.ENVIRONMENT }} \
             --capabilities CAPABILITY_IAM \
             --no-fail-on-empty-changeset
           
+          # Wait for network stack to be completely ready
+          aws cloudformation wait stack-deploy-complete \
+            --stack-name d-devops-challenge-network
+          
           # Get ECR URI
-          ECR_URI=$(aws ecr describe-repositories --repository-names merck-devopsch-api --query 'repositories[0].repositoryUri' --output text)
+          ECR_URI=$(aws ecr describe-repositories --repository-names d-devops-challenge-ecr-repo --query 'repositories[0].repositoryUri' --output text)
           echo "ecr-uri=$ECR_URI" >> $GITHUB_OUTPUT
 
   test:
-    needs: deploy-infrastructure
+    needs: [deploy-infrastructure, lint-and-validate]
+    if: needs.detect-changes.outputs.app-changed == 'true' || github.event.inputs.force_full_deploy == 'true' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -75,6 +158,7 @@ jobs:
 
   build:
     needs: [deploy-infrastructure, test]
+    if: needs.detect-changes.outputs.app-changed == 'true' || github.event.inputs.force_full_deploy == 'true' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     outputs:
       image-uri: ${{ steps.build-image.outputs.image }}
@@ -92,7 +176,7 @@ jobs:
       - name: Build and push image
         id: build-image
         env:
-          ECR_REPOSITORY: merck-devopsch-api
+          ECR_REPOSITORY: d-devops-challenge-ecr-repo
           IMAGE_TAG: ${{ github.sha }}
         run: |
           ECR_REGISTRY=${{ needs.deploy-infrastructure.outputs.ecr-uri }}
@@ -107,6 +191,7 @@ jobs:
 
   deploy-application:
     needs: [deploy-infrastructure, build]
+    if: needs.detect-changes.outputs.deploy-needed == 'true' || github.event.inputs.force_full_deploy == 'true' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -126,12 +211,16 @@ jobs:
           
           aws cloudformation deploy \
             --template-file packaged-compute.yml \
-            --stack-name ${{ env.ENVIRONMENT }}-merck-compute \
+            --stack-name d-devops-challenge-compute \
             --parameter-overrides \
               Environment=${{ env.ENVIRONMENT }} \
               ImageURI=${{ needs.build.outputs.image-uri }} \
             --capabilities CAPABILITY_IAM \
             --no-fail-on-empty-changeset
+          
+          # Wait for compute stack to be completely ready
+          aws cloudformation wait stack-deploy-complete \
+            --stack-name d-devops-challenge-compute
           
           # Deploy monitoring stack
           aws cloudformation package \
@@ -141,15 +230,19 @@ jobs:
           
           aws cloudformation deploy \
             --template-file packaged-monitoring.yml \
-            --stack-name ${{ env.ENVIRONMENT }}-merck-monitoring \
+            --stack-name d-devops-challenge-monitoring \
             --parameter-overrides Environment=${{ env.ENVIRONMENT }} \
             --capabilities CAPABILITY_IAM \
             --no-fail-on-empty-changeset
+          
+          # Wait for monitoring stack to be completely ready
+          aws cloudformation wait stack-deploy-complete \
+            --stack-name d-devops-challenge-monitoring
       
       - name: Get application URL
         run: |
           URL=$(aws cloudformation describe-stacks \
-            --stack-name ${{ env.ENVIRONMENT }}-merck-compute \
+            --stack-name d-devops-challenge-compute \
             --query 'Stacks[0].Outputs[?OutputKey==`LoadBalancerURL`].OutputValue' \
             --output text)
           echo "🚀 Application deployed at: $URL"

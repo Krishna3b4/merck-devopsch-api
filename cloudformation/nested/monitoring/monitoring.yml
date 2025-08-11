@@ -11,7 +11,7 @@ Resources:
   Dashboard:
     Type: AWS::CloudWatch::Dashboard
     Properties:
-      DashboardName: !Sub ${Environment}-merck-dashboard
+      DashboardName: !Sub d-devops-challenge-dashboard
       DashboardBody: !Sub |
         {
           "widgets": [
@@ -23,7 +23,7 @@ Resources:
               "height": 6,
               "properties": {
                 "metrics": [
-                  [ "AWS/ECS", "CPUUtilization", "ServiceName", "${Environment}-merck-service", "ClusterName", "${Environment}-merck-cluster" ],
+                  [ "AWS/ECS", "CPUUtilization", "ServiceName", "d-devops-challenge-ecs-service", "ClusterName", "d-devops-challenge-ecs-cluster" ],
                   [ ".", "MemoryUtilization", ".", ".", ".", "." ]
                 ],
                 "period": 300,
@@ -40,7 +40,7 @@ Resources:
               "height": 6,
               "properties": {
                 "metrics": [
-                  [ "AWS/ApplicationELB", "RequestCount", "LoadBalancer", "${Environment}-merck-alb" ],
+                  [ "AWS/ApplicationELB", "RequestCount", "LoadBalancer", "d-devops-challenge-alb" ],
                   [ ".", "TargetResponseTime", ".", "." ]
                 ],
                 "period": 300,
@@ -55,7 +55,7 @@ Resources:
   HighCPUAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub ${Environment}-merck-high-cpu
+      AlarmName: !Sub d-devops-challenge-high-cpu-alarm
       AlarmDescription: High CPU utilization alarm
       MetricName: CPUUtilization
       Namespace: AWS/ECS
@@ -66,11 +66,11 @@ Resources:
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
         - Name: ServiceName
-          Value: !Sub ${Environment}-merck-service
+          Value: !Sub d-devops-challenge-ecs-service
         - Name: ClusterName
-          Value: !Sub ${Environment}-merck-cluster
+          Value: !Sub d-devops-challenge-ecs-cluster
 
 Outputs:
   DashboardURL:
     Description: CloudWatch Dashboard URL
-    Value: !Sub https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${Environment}-merck-dashboard
+    Value: !Sub https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=d-devops-challenge-dashboard

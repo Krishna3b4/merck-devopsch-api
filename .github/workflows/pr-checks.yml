@@ -1,0 +1,41 @@
+name: PR Checks
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  validate-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate PR title
+        run: |
+          if [[ ! "${{ github.event.pull_request.title }}" =~ ^(feat|fix|docs|style|refactor|test|chore)(\(.+\))?: .+ ]]; then
+            echo "❌ PR title must follow conventional commits format"
+            echo "Examples: feat: add new endpoint, fix(auth): resolve token issue"
+            exit 1
+          fi
+      - name: Check for breaking changes
+        run: |
+          if git diff --name-only origin/main...HEAD | grep -E "(cloudformation/|Dockerfile|requirements.txt)"; then
+            echo "⚠️ Infrastructure or dependency changes detected"
+            echo "Please ensure backward compatibility and update documentation"
+          fi
+
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'

@@ -130,6 +130,32 @@ After deployment, access:
 ✅ Infrastructure as Code  
 ✅ Container orchestration  
 ✅ Load balancing and auto-scaling ready  
+✅ Code quality enforcement (Black, isort, flake8)  
+✅ Security scanning (Bandit, Safety, Trivy)  
+✅ Change detection for optimized deployments  
+✅ PR validation and conventional commits  
+✅ Comprehensive linting and validation  
+
+## 🔧 Development Workflow
+
+### Code Quality
+```bash
+# Format code
+black app/
+isort app/
+
+# Lint code
+flake8 app/
+
+# Security scan
+bandit -r app/
+safety check
+```
+
+### Infrastructure Changes
+- CloudFormation templates are linted with cfn-lint
+- Infrastructure changes trigger full redeployment
+- Separate validation for infrastructure vs application changes  
 
 ---
 

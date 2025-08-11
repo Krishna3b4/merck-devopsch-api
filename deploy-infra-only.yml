@@ -13,7 +13,7 @@ Resources:
   ECRRepository:
     Type: AWS::ECR::Repository
     Properties:
-      RepositoryName: merck-devopsch-api
+      RepositoryName: d-devops-challenge-ecr-repo
       ImageTagMutability: MUTABLE
       ImageScanningConfiguration:
         ScanOnPush: false
@@ -38,4 +38,4 @@ Outputs:
     Description: ECR Repository URI
     Value: !GetAtt ECRRepository.RepositoryUri
     Export:
-      Name: !Sub ${Environment}-ECR-Repository-URI
+      Name: !Sub d-devops-challenge-ecr-repository-uri

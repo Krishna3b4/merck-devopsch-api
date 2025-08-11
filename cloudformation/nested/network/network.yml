@@ -16,7 +16,7 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: !Sub ${Environment}-merck-vpc
+          Value: !Sub d-devops-challenge-vpc
 
   PublicSubnet1:
     Type: AWS::EC2::Subnet
@@ -27,7 +27,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub ${Environment}-public-subnet-1
+          Value: !Sub d-devops-challenge-public-subnet-1
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
@@ -38,14 +38,14 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub ${Environment}-public-subnet-2
+          Value: !Sub d-devops-challenge-public-subnet-2
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub ${Environment}-igw
+          Value: !Sub d-devops-challenge-igw
 
   AttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -59,7 +59,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub ${Environment}-public-rt
+          Value: !Sub d-devops-challenge-public-rt
 
   PublicRoute:
     Type: AWS::EC2::Route
@@ -86,16 +86,16 @@ Outputs:
     Description: VPC ID
     Value: !Ref VPC
     Export:
-      Name: !Sub ${Environment}-VPC-ID
+      Name: !Sub d-devops-challenge-vpc-id
 
   PublicSubnet1Id:
     Description: Public Subnet 1 ID
     Value: !Ref PublicSubnet1
     Export:
-      Name: !Sub ${Environment}-PublicSubnet1-ID
+      Name: !Sub d-devops-challenge-public-subnet1-id
 
   PublicSubnet2Id:
     Description: Public Subnet 2 ID
     Value: !Ref PublicSubnet2
     Export:
-      Name: !Sub ${Environment}-PublicSubnet2-ID
+      Name: !Sub d-devops-challenge-public-subnet2-id
