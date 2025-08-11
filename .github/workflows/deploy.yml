@@ -139,6 +139,46 @@ jobs:
             --stack-name d-devops-challenge-network || \
           aws cloudformation wait stack-update-complete \
             --stack-name d-devops-challenge-network
+          
+          # Package and deploy compute stack
+          aws cloudformation package \
+            --template-file cloudformation/nested/compute/compute.yml \
+            --s3-bucket ${{ secrets.CF_BUCKET }} \
+            --output-template-file packaged-compute.yml
+          
+          aws cloudformation deploy \
+            --template-file packaged-compute.yml \
+            --stack-name d-devops-challenge-compute \
+            --parameter-overrides \
+              Environment=${{ env.ENVIRONMENT }} \
+              ImageURI=$ECR_URI:latest \
+            --capabilities CAPABILITY_IAM \
+            --no-fail-on-empty-changeset
+          
+          # Wait for compute stack to be completely ready
+          aws cloudformation wait stack-create-complete \
+            --stack-name d-devops-challenge-compute || \
+          aws cloudformation wait stack-update-complete \
+            --stack-name d-devops-challenge-compute
+          
+          # Package and deploy monitoring stack
+          aws cloudformation package \
+            --template-file cloudformation/nested/monitoring/monitoring.yml \
+            --s3-bucket ${{ secrets.CF_BUCKET }} \
+            --output-template-file packaged-monitoring.yml
+          
+          aws cloudformation deploy \
+            --template-file packaged-monitoring.yml \
+            --stack-name d-devops-challenge-monitoring \
+            --parameter-overrides Environment=${{ env.ENVIRONMENT }} \
+            --capabilities CAPABILITY_IAM \
+            --no-fail-on-empty-changeset
+          
+          # Wait for monitoring stack to be completely ready
+          aws cloudformation wait stack-create-complete \
+            --stack-name d-devops-challenge-monitoring || \
+          aws cloudformation wait stack-update-complete \
+            --stack-name d-devops-challenge-monitoring
 
   test:
     needs: [deploy-infrastructure, lint-and-validate]
