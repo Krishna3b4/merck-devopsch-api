@@ -1,0 +1,49 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Root stack for Merck DevOps Challenge
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, staging, prod]
+    Description: Environment name
+  
+  ImageURI:
+    Type: String
+    Description: ECR image URI for the application
+    Default: "public.ecr.aws/docker/library/python:3.11-slim"
+
+Resources:
+  NetworkStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: nested/network/network.yml
+      Parameters:
+        Environment: !Ref Environment
+
+  ComputeStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: NetworkStack
+    Properties:
+      TemplateURL: nested/compute/compute.yml
+      Parameters:
+        Environment: !Ref Environment
+        ImageURI: !Ref ImageURI
+
+  MonitoringStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: ComputeStack
+    Properties:
+      TemplateURL: nested/monitoring/monitoring.yml
+      Parameters:
+        Environment: !Ref Environment
+
+Outputs:
+  ApplicationURL:
+    Description: Application Load Balancer URL
+    Value:
+      Fn::GetAtt:
+        - ComputeStack
+        - Outputs.LoadBalancerURL
+    Export:
+      Name: !Sub ${Environment}-Application-URL
