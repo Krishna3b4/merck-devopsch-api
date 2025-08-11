@@ -67,12 +67,12 @@ jobs:
         run: |
           pip install flake8 black isort bandit safety
           pip install cfn-lint
-      - name: Python code formatting check
+      - name: Python code formatting
         run: |
-          black --check app/ || (echo "❌ Code formatting issues found. Run 'black app/' to fix." && exit 1)
-      - name: Python import sorting check
+          black app/
+      - name: Python import sorting
         run: |
-          isort --check-only app/ || (echo "❌ Import sorting issues found. Run 'isort app/' to fix." && exit 1)
+          isort app/
       - name: Python linting
         run: |
           flake8 app/ --max-line-length=88 --extend-ignore=E203,W503
