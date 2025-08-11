@@ -145,9 +145,9 @@ Resources:
           SecurityGroups:
             - !Ref SecurityGroup
           Subnets:
-            - Fn::ImportValue: !Sub d-devops-challenge-public-subnet1-id
-            - Fn::ImportValue: !Sub d-devops-challenge-public-subnet2-id
-          AssignPublicIp: ENABLED
+            - Fn::ImportValue: !Sub d-devops-challenge-private-subnet1-id
+            - Fn::ImportValue: !Sub d-devops-challenge-private-subnet2-id
+          AssignPublicIp: DISABLED
       LoadBalancers:
         - ContainerName: api
           ContainerPort: 8000
