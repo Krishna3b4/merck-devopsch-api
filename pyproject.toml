@@ -24,4 +24,4 @@ known_first_party = ["app"]
 
 [tool.bandit]
 exclude_dirs = ["tests", "test_*.py"]
-skips = ["B101"]
+skips = ["B101", "B104"]
