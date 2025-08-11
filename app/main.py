@@ -1,11 +1,12 @@
-from fastapi import FastAPI, HTTPException, Depends, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from pydantic import BaseModel
-from typing import List, Optional
+import jwt
 import logging
 import os
-import jwt
 from datetime import datetime, timedelta
+from typing import List, Optional
+
+from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from pydantic import BaseModel
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -28,14 +29,17 @@ class Item(BaseModel):
     description: Optional[str] = None
     price: float
 
+
 class ItemCreate(BaseModel):
     name: str
     description: Optional[str] = None
     price: float
 
+
 class LoginRequest(BaseModel):
     username: str
     password: str
+
 
 class Token(BaseModel):
     access_token: str
@@ -43,15 +47,18 @@ class Token(BaseModel):
 
 # In-memory storage for demo
 items_db = [
-    {"id": 1, "name": "Laptop", "description": "High-performance laptop", "price": 999.99},
-    {"id": 2, "name": "Mouse", "description": "Wireless mouse", "price": 29.99}
+    {
+        "id": 1,
+        "name": "Laptop",
+        "description": "High-performance laptop",
+        "price": 999.99,
+    },
+    {"id": 2, "name": "Mouse", "description": "Wireless mouse", "price": 29.99},
 ]
 
 # Demo users (in production, use proper user management)
-users_db = {
-    "demo": "password123",
-    "merck": "challenge2024"
-}
+users_db = {"demo": "password123", "merck": "challenge2024"}
+
 
 def create_access_token(data: dict):
     """Create JWT access token"""
@@ -60,10 +67,13 @@ def create_access_token(data: dict):
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
+
 def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
     """Verify JWT token"""
     try:
-        payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(
+            credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM]
+        )
         username: str = payload.get("sub")
         if username is None:
             raise HTTPException(status_code=401, detail="Invalid token")
@@ -74,9 +84,12 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
 @app.post("/login", response_model=Token)
 def login(request: LoginRequest):
     """Login endpoint to get access token"""
-    if request.username not in users_db or users_db[request.username] != request.password:
+    if (
+        request.username not in users_db
+        or users_db[request.username] != request.password
+    ):
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    
+
     access_token = create_access_token(data={"sub": request.username})
     logger.info(f"User {request.username} logged in")
     return {"access_token": access_token, "token_type": "bearer"}
