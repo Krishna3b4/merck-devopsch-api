@@ -10,7 +10,7 @@ Parameters:
   ImageURI:
     Type: String
     Description: ECR image URI
-    Default: "public.ecr.aws/docker/library/python:3.11-slim"
+    Default: "495762952500.dkr.ecr.us-east-1.amazonaws.com/merck-devopsch-api:latest"
 
 Resources:
   ECSCluster:

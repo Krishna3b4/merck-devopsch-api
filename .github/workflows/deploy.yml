@@ -20,7 +20,44 @@ env:
   ENVIRONMENT: ${{ github.event.inputs.environment || 'dev' }}
 
 jobs:
+  deploy-infrastructure:
+    runs-on: ubuntu-latest
+    outputs:
+      ecr-uri: ${{ steps.deploy-infra.outputs.ecr-uri }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Deploy infrastructure
+        id: deploy-infra
+        run: |
+          # Create ECR repository first
+          aws ecr describe-repositories --repository-names merck-devopsch-api || \
+          aws ecr create-repository --repository-name merck-devopsch-api
+          
+          # Package and deploy network stack
+          aws cloudformation package \
+            --template-file cloudformation/nested/network/network.yml \
+            --s3-bucket ${{ secrets.CF_BUCKET }} \
+            --output-template-file packaged-network.yml
+          
+          aws cloudformation deploy \
+            --template-file packaged-network.yml \
+            --stack-name ${{ env.ENVIRONMENT }}-merck-network \
+            --parameter-overrides Environment=${{ env.ENVIRONMENT }} \
+            --capabilities CAPABILITY_IAM \
+            --no-fail-on-empty-changeset
+          
+          # Get ECR URI
+          ECR_URI=$(aws ecr describe-repositories --repository-names merck-devopsch-api --query 'repositories[0].repositoryUri' --output text)
+          echo "ecr-uri=$ECR_URI" >> $GITHUB_OUTPUT
+
   test:
+    needs: deploy-infrastructure
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -37,7 +74,7 @@ jobs:
           python -m pytest app/ -v || echo "No tests found, skipping"
 
   build:
-    needs: test
+    needs: [deploy-infrastructure, test]
     runs-on: ubuntu-latest
     outputs:
       image-uri: ${{ steps.build-image.outputs.image }}
@@ -55,21 +92,21 @@ jobs:
       - name: Build and push image
         id: build-image
         env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           ECR_REPOSITORY: merck-devopsch-api
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          # Create ECR repository if it doesn't exist
-          aws ecr describe-repositories --repository-names $ECR_REPOSITORY || \
-          aws ecr create-repository --repository-name $ECR_REPOSITORY
+          ECR_REGISTRY=${{ needs.deploy-infrastructure.outputs.ecr-uri }}
+          ECR_REGISTRY=${ECR_REGISTRY%/*}
           
           # Build and push image
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
           echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
-  deploy:
-    needs: build
+  deploy-application:
+    needs: [deploy-infrastructure, build]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -79,26 +116,44 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
-      - name: Package CloudFormation templates
+      - name: Deploy application stack
         run: |
+          # Package and deploy compute stack
           aws cloudformation package \
-            --template-file cloudformation/main.yml \
+            --template-file cloudformation/nested/compute/compute.yml \
             --s3-bucket ${{ secrets.CF_BUCKET }} \
-            --output-template-file packaged-template.yml
-      - name: Deploy CloudFormation stack
-        run: |
+            --output-template-file packaged-compute.yml
+          
           aws cloudformation deploy \
-            --template-file packaged-template.yml \
-            --stack-name ${{ env.ENVIRONMENT }}-merck-devopsch \
+            --template-file packaged-compute.yml \
+            --stack-name ${{ env.ENVIRONMENT }}-merck-compute \
             --parameter-overrides \
               Environment=${{ env.ENVIRONMENT }} \
               ImageURI=${{ needs.build.outputs.image-uri }} \
             --capabilities CAPABILITY_IAM \
             --no-fail-on-empty-changeset
+          
+          # Deploy monitoring stack
+          aws cloudformation package \
+            --template-file cloudformation/nested/monitoring/monitoring.yml \
+            --s3-bucket ${{ secrets.CF_BUCKET }} \
+            --output-template-file packaged-monitoring.yml
+          
+          aws cloudformation deploy \
+            --template-file packaged-monitoring.yml \
+            --stack-name ${{ env.ENVIRONMENT }}-merck-monitoring \
+            --parameter-overrides Environment=${{ env.ENVIRONMENT }} \
+            --capabilities CAPABILITY_IAM \
+            --no-fail-on-empty-changeset
+      
       - name: Get application URL
         run: |
           URL=$(aws cloudformation describe-stacks \
-            --stack-name ${{ env.ENVIRONMENT }}-merck-devopsch \
-            --query 'Stacks[0].Outputs[?OutputKey==`ApplicationURL`].OutputValue' \
+            --stack-name ${{ env.ENVIRONMENT }}-merck-compute \
+            --query 'Stacks[0].Outputs[?OutputKey==`LoadBalancerURL`].OutputValue' \
             --output text)
-          echo "Application deployed at: $URL"
+          echo "🚀 Application deployed at: $URL"
+          echo "📋 Test endpoints:"
+          echo "  Health: $URL/health"
+          echo "  Login: $URL/login (POST with {\"username\": \"demo\", \"password\": \"password123\"})"
+          echo "  Items: $URL/items (GET with Bearer token)"

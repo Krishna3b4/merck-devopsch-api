@@ -1,0 +1,30 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Application deployment for Merck DevOps Challenge
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, staging, prod]
+    Description: Environment name
+  
+  ImageURI:
+    Type: String
+    Description: ECR image URI for the application
+
+Resources:
+  ComputeStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: nested/compute/compute.yml
+      Parameters:
+        Environment: !Ref Environment
+        ImageURI: !Ref ImageURI
+
+Outputs:
+  ApplicationURL:
+    Description: Application Load Balancer URL
+    Value:
+      Fn::GetAtt:
+        - ComputeStack
+        - Outputs.LoadBalancerURL
