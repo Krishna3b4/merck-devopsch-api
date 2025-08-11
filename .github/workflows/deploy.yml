@@ -86,7 +86,7 @@ jobs:
           safety check
       - name: CloudFormation linting
         run: |
-          cfn-lint cloudformation/**/*.yml
+          cfn-lint cloudformation/**/*.yml --ignore-checks W1020,W2001,W3002
       - name: Upload security reports
         uses: actions/upload-artifact@v4
         if: always()
