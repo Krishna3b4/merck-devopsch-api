@@ -117,6 +117,10 @@ jobs:
           aws ecr describe-repositories --repository-names d-devops-challenge-ecr-repo || \
           aws ecr create-repository --repository-name d-devops-challenge-ecr-repo
           
+          # Get ECR URI after creation
+          ECR_URI=$(aws ecr describe-repositories --repository-names d-devops-challenge-ecr-repo --query 'repositories[0].repositoryUri' --output text)
+          echo "ecr-uri=$ECR_URI" >> $GITHUB_OUTPUT
+          
           # Package and deploy network stack
           aws cloudformation package \
             --template-file cloudformation/nested/network/network.yml \
@@ -131,12 +135,10 @@ jobs:
             --no-fail-on-empty-changeset
           
           # Wait for network stack to be completely ready
-          aws cloudformation wait stack-deploy-complete \
+          aws cloudformation wait stack-create-complete \
+            --stack-name d-devops-challenge-network || \
+          aws cloudformation wait stack-update-complete \
             --stack-name d-devops-challenge-network
-          
-          # Get ECR URI
-          ECR_URI=$(aws ecr describe-repositories --repository-names d-devops-challenge-ecr-repo --query 'repositories[0].repositoryUri' --output text)
-          echo "ecr-uri=$ECR_URI" >> $GITHUB_OUTPUT
 
   test:
     needs: [deploy-infrastructure, lint-and-validate]
@@ -219,7 +221,9 @@ jobs:
             --no-fail-on-empty-changeset
           
           # Wait for compute stack to be completely ready
-          aws cloudformation wait stack-deploy-complete \
+          aws cloudformation wait stack-create-complete \
+            --stack-name d-devops-challenge-compute || \
+          aws cloudformation wait stack-update-complete \
             --stack-name d-devops-challenge-compute
           
           # Deploy monitoring stack
@@ -236,7 +240,9 @@ jobs:
             --no-fail-on-empty-changeset
           
           # Wait for monitoring stack to be completely ready
-          aws cloudformation wait stack-deploy-complete \
+          aws cloudformation wait stack-create-complete \
+            --stack-name d-devops-challenge-monitoring || \
+          aws cloudformation wait stack-update-complete \
             --stack-name d-devops-challenge-monitoring
       
       - name: Get application URL
