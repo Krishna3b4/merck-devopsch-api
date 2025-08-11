@@ -16,7 +16,7 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: !Sub d-devops-challenge-vpc
+          Value: d-devops-challenge-vpc
 
   PublicSubnet1:
     Type: AWS::EC2::Subnet
@@ -27,7 +27,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub d-devops-challenge-public-subnet-1
+          Value: d-devops-challenge-public-subnet-1
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
@@ -38,14 +38,14 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub d-devops-challenge-public-subnet-2
+          Value: d-devops-challenge-public-subnet-2
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub d-devops-challenge-igw
+          Value: d-devops-challenge-igw
 
   AttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -59,7 +59,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub d-devops-challenge-public-rt
+          Value: d-devops-challenge-public-rt
 
   PublicRoute:
     Type: AWS::EC2::Route

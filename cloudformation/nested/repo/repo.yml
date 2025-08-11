@@ -1,2 +1,6 @@
 AWSTemplateFormatVersion: 2010-09-09
 Description: ECR repo stack placeholder
+
+Resources:
+  RepoPlaceholder:
+    Type: AWS::CloudFormation::WaitConditionHandle
