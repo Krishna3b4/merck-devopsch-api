@@ -164,16 +164,21 @@ jobs:
             --s3-bucket ${{ secrets.CF_BUCKET }} \
             --output-template-file packaged-auth.yml
           
+          # Check if auth stack exists and is in ROLLBACK_COMPLETE state
+          STACK_STATUS=$(aws cloudformation describe-stacks --stack-name d-devops-challenge-auth --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "DOES_NOT_EXIST")
+          
+          if [ "$STACK_STATUS" = "ROLLBACK_COMPLETE" ]; then
+            echo "Deleting failed auth stack..."
+            aws cloudformation delete-stack --stack-name d-devops-challenge-auth
+            aws cloudformation wait stack-delete-complete --stack-name d-devops-challenge-auth
+          fi
+          
           aws cloudformation deploy \
             --template-file packaged-auth.yml \
             --stack-name d-devops-challenge-auth \
             --parameter-overrides Environment=${{ env.ENVIRONMENT }} \
             --capabilities CAPABILITY_IAM \
-            --no-fail-on-empty-changeset || {
-            echo "Auth stack deployment failed. Getting stack events:"
-            aws cloudformation describe-stack-events --stack-name d-devops-challenge-auth --max-items 10
-            exit 1
-          }
+            --no-fail-on-empty-changeset
           
           # Wait for auth stack
           aws cloudformation wait stack-create-complete \
