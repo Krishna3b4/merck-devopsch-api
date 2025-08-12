@@ -56,7 +56,6 @@ Resources:
           Value: demo@merck-challenge.com
         - Name: email_verified
           Value: "true"
-      TemporaryPassword: TempPass123!
       MessageAction: SUPPRESS
 
 Outputs:
