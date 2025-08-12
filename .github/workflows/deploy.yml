@@ -140,6 +140,25 @@ jobs:
           aws cloudformation wait stack-update-complete \
             --stack-name d-devops-challenge-network
           
+          # Package and deploy auth stack first
+          aws cloudformation package \
+            --template-file cloudformation/nested/auth/auth.yml \
+            --s3-bucket ${{ secrets.CF_BUCKET }} \
+            --output-template-file packaged-auth.yml
+          
+          aws cloudformation deploy \
+            --template-file packaged-auth.yml \
+            --stack-name d-devops-challenge-auth \
+            --parameter-overrides Environment=${{ env.ENVIRONMENT }} \
+            --capabilities CAPABILITY_IAM \
+            --no-fail-on-empty-changeset
+          
+          # Wait for auth stack
+          aws cloudformation wait stack-create-complete \
+            --stack-name d-devops-challenge-auth || \
+          aws cloudformation wait stack-update-complete \
+            --stack-name d-devops-challenge-auth
+          
           # Package and deploy compute stack
           aws cloudformation package \
             --template-file cloudformation/nested/compute/compute.yml \

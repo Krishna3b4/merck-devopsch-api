@@ -35,6 +35,16 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyName: CognitoAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cognito-idp:AdminInitiateAuth
+                  - cognito-idp:GetUser
+                Resource: '*'
 
   TaskDefinition:
     Type: AWS::ECS::TaskDefinition
@@ -61,8 +71,14 @@ Resources:
           Environment:
             - Name: ENV
               Value: !Ref Environment
-            - Name: JWT_SECRET
-              Value: "merck-demo-jwt-secret-2024"
+            - Name: COGNITO_USER_POOL_ID
+              Value:
+                Fn::ImportValue: !Sub ${Environment}-cognito-user-pool-id
+            - Name: COGNITO_CLIENT_ID
+              Value:
+                Fn::ImportValue: !Sub ${Environment}-cognito-client-id
+            - Name: AWS_REGION
+              Value: !Ref AWS::Region
 
   LogGroup:
     Type: AWS::Logs::LogGroup

@@ -1,7 +1,7 @@
-import jwt
+import boto3
+import json
 import logging
 import os
-from datetime import datetime, timedelta
 from typing import List, Optional
 
 from fastapi import Depends, FastAPI, HTTPException
@@ -12,9 +12,12 @@ from pydantic import BaseModel
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Security configuration
-SECRET_KEY = os.getenv("JWT_SECRET", "merck-demo-secret-key")
-ALGORITHM = "HS256"
+# Cognito configuration
+COGNITO_USER_POOL_ID = os.getenv("COGNITO_USER_POOL_ID", "us-east-1_PLACEHOLDER")
+COGNITO_CLIENT_ID = os.getenv("COGNITO_CLIENT_ID", "PLACEHOLDER")
+AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
+
+cognito_client = boto3.client('cognito-idp', region_name=AWS_REGION)
 security = HTTPBearer()
 
 app = FastAPI(
@@ -56,43 +59,45 @@ items_db = [
     {"id": 2, "name": "Mouse", "description": "Wireless mouse", "price": 29.99},
 ]
 
-# Demo users (in production, use proper user management)
-users_db = {"demo": "password123", "merck": "challenge2024"}
+# Demo credentials for Cognito
+DEMO_CREDENTIALS = {"demo": "password123"}
 
 
-def create_access_token(data: dict):
-    """Create JWT access token"""
-    to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(hours=24)
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-
-
-def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    """Verify JWT token"""
+def verify_cognito_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Verify Cognito access token"""
     try:
-        payload = jwt.decode(
-            credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM]
+        response = cognito_client.get_user(
+            AccessToken=credentials.credentials
         )
-        username: str = payload.get("sub")
-        if username is None:
-            raise HTTPException(status_code=401, detail="Invalid token")
+        username = response['Username']
         return username
-    except jwt.PyJWTError:
+    except Exception as e:
+        logger.error(f"Token verification failed: {str(e)}")
         raise HTTPException(status_code=401, detail="Invalid token")
 
 @app.post("/login", response_model=Token)
 def login(request: LoginRequest):
-    """Login endpoint to get access token"""
-    if (
-        request.username not in users_db
-        or users_db[request.username] != request.password
-    ):
+    """Login endpoint using Cognito authentication"""
+    try:
+        response = cognito_client.admin_initiate_auth(
+            UserPoolId=COGNITO_USER_POOL_ID,
+            ClientId=COGNITO_CLIENT_ID,
+            AuthFlow='ADMIN_NO_SRP_AUTH',
+            AuthParameters={
+                'USERNAME': request.username,
+                'PASSWORD': request.password
+            }
+        )
+        
+        access_token = response['AuthenticationResult']['AccessToken']
+        logger.info(f"User {request.username} logged in via Cognito")
+        return {"access_token": access_token, "token_type": "bearer"}
+        
+    except cognito_client.exceptions.NotAuthorizedException:
         raise HTTPException(status_code=401, detail="Invalid credentials")
-
-    access_token = create_access_token(data={"sub": request.username})
-    logger.info(f"User {request.username} logged in")
-    return {"access_token": access_token, "token_type": "bearer"}
+    except Exception as e:
+        logger.error(f"Login failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Authentication service error")
 
 @app.get("/health")
 def health_check():
@@ -101,13 +106,13 @@ def health_check():
     return {"status": "healthy", "environment": os.getenv("ENV", "development")}
 
 @app.get("/items", response_model=List[Item])
-def get_items(current_user: str = Depends(verify_token)):
+def get_items(current_user: str = Depends(verify_cognito_token)):
     """Get all items (requires authentication)"""
     logger.info(f"User {current_user} retrieved {len(items_db)} items")
     return items_db
 
 @app.get("/items/{item_id}", response_model=Item)
-def get_item(item_id: int, current_user: str = Depends(verify_token)):
+def get_item(item_id: int, current_user: str = Depends(verify_cognito_token)):
     """Get item by ID (requires authentication)"""
     item = next((item for item in items_db if item["id"] == item_id), None)
     if not item:
@@ -116,7 +121,7 @@ def get_item(item_id: int, current_user: str = Depends(verify_token)):
     return item
 
 @app.post("/items", response_model=Item)
-def create_item(item: ItemCreate, current_user: str = Depends(verify_token)):
+def create_item(item: ItemCreate, current_user: str = Depends(verify_cognito_token)):
     """Create new item (requires authentication)"""
     new_id = max([item["id"] for item in items_db], default=0) + 1
     new_item = {"id": new_id, **item.dict()}
