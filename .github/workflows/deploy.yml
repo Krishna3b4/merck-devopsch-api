@@ -113,12 +113,30 @@ jobs:
       - name: Deploy infrastructure
         id: deploy-infra
         run: |
-          # Create ECR repository first
-          aws ecr describe-repositories --repository-names d-devops-challenge-ecr-repo || \
-          aws ecr create-repository --repository-name d-devops-challenge-ecr-repo
+          # Deploy ECR repository first
+          aws cloudformation package \
+            --template-file cloudformation/nested/repo/repo.yml \
+            --s3-bucket ${{ secrets.CF_BUCKET }} \
+            --output-template-file packaged-repo.yml
           
-          # Get ECR URI after creation
-          ECR_URI=$(aws ecr describe-repositories --repository-names d-devops-challenge-ecr-repo --query 'repositories[0].repositoryUri' --output text)
+          aws cloudformation deploy \
+            --template-file packaged-repo.yml \
+            --stack-name d-devops-challenge-repo \
+            --parameter-overrides Environment=${{ env.ENVIRONMENT }} \
+            --capabilities CAPABILITY_IAM \
+            --no-fail-on-empty-changeset
+          
+          # Wait for repo stack
+          aws cloudformation wait stack-create-complete \
+            --stack-name d-devops-challenge-repo || \
+          aws cloudformation wait stack-update-complete \
+            --stack-name d-devops-challenge-repo
+          
+          # Get ECR URI from CloudFormation output
+          ECR_URI=$(aws cloudformation describe-stacks \
+            --stack-name d-devops-challenge-repo \
+            --query 'Stacks[0].Outputs[?OutputKey==`ECRRepositoryURI`].OutputValue' \
+            --output text)
           echo "ecr-uri=$ECR_URI" >> $GITHUB_OUTPUT
           
           # Package and deploy network stack
@@ -151,7 +169,11 @@ jobs:
             --stack-name d-devops-challenge-auth \
             --parameter-overrides Environment=${{ env.ENVIRONMENT }} \
             --capabilities CAPABILITY_IAM \
-            --no-fail-on-empty-changeset
+            --no-fail-on-empty-changeset || {
+            echo "Auth stack deployment failed. Getting stack events:"
+            aws cloudformation describe-stack-events --stack-name d-devops-challenge-auth --max-items 10
+            exit 1
+          }
           
           # Wait for auth stack
           aws cloudformation wait stack-create-complete \

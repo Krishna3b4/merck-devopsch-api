@@ -46,17 +46,7 @@ Resources:
       IdTokenValidity: 24
       RefreshTokenValidity: 30
 
-  DemoUser:
-    Type: AWS::Cognito::UserPoolUser
-    Properties:
-      UserPoolId: !Ref UserPool
-      Username: demo
-      UserAttributes:
-        - Name: email
-          Value: demo@merck-challenge.com
-        - Name: email_verified
-          Value: "true"
-      MessageAction: SUPPRESS
+
 
 Outputs:
   UserPoolId:
