@@ -11,7 +11,7 @@ Resources:
   ECRRepository:
     Type: AWS::ECR::Repository
     Properties:
-      RepositoryName: !Sub ${Environment}-merck-devops-challenge-ecr-repo
+      RepositoryName: d-devops-challenge-ecr-repo
       ImageTagMutability: MUTABLE
       ImageScanningConfiguration:
         ScanOnPush: true
