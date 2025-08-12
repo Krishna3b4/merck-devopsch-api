@@ -330,6 +330,27 @@ jobs:
             --stack-name d-devops-challenge-monitoring || \
           aws cloudformation wait stack-update-complete \
             --stack-name d-devops-challenge-monitoring
+          
+          # Create demo user in Cognito
+          USER_POOL_ID=$(aws cloudformation describe-stacks \
+            --stack-name d-devops-challenge-auth \
+            --query 'Stacks[0].Outputs[?OutputKey==`UserPoolId`].OutputValue' \
+            --output text)
+          
+          # Create demo user (ignore if already exists)
+          aws cognito-idp admin-create-user \
+            --user-pool-id $USER_POOL_ID \
+            --username demo \
+            --user-attributes Name=email,Value=demo@merck-challenge.com Name=email_verified,Value=true \
+            --temporary-password TempPass123! \
+            --message-action SUPPRESS || echo "Demo user already exists"
+          
+          # Set permanent password
+          aws cognito-idp admin-set-user-password \
+            --user-pool-id $USER_POOL_ID \
+            --username demo \
+            --password password123 \
+            --permanent || echo "Password already set"
       
       - name: Get application URL
         run: |
