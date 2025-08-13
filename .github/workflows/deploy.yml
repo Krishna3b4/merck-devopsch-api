@@ -120,7 +120,9 @@ jobs:
             aws s3 mb s3://${{ secrets.CF_BUCKET }} --region ${{ env.AWS_REGION }}
           fi
           
-          aws cloudformation package --template-file cloudformation/main.yml --s3-bucket ${{ secrets.CF_BUCKET }} --output-template-file packaged-main.yml --region ${{ env.AWS_REGION }}
+          BUCKET="${{ secrets.CF_BUCKET }}"
+          REGION="${{ env.AWS_REGION }}"
+          aws cloudformation package --template-file cloudformation/main.yml --s3-bucket "$BUCKET" --output-template-file packaged-main.yml --region "$REGION"
           
           STACK_STATUS=$(aws cloudformation describe-stacks --stack-name $STACK_NAME --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "DOES_NOT_EXIST")
           
@@ -218,7 +220,9 @@ jobs:
         run: |
           STACK_NAME="${{ env.ENVIRONMENT }}-merck-devops-challenge-main"
           
-          aws cloudformation package --template-file cloudformation/main.yml --s3-bucket ${{ secrets.CF_BUCKET }} --output-template-file packaged-main.yml --region ${{ env.AWS_REGION }}
+          BUCKET="${{ secrets.CF_BUCKET }}"
+          REGION="${{ env.AWS_REGION }}"
+          aws cloudformation package --template-file cloudformation/main.yml --s3-bucket "$BUCKET" --output-template-file packaged-main.yml --region "$REGION"
           
           TEMP_PARAM_FILE=$(mktemp)
           jq --arg imageUri "${{ needs.build.outputs.image-uri }}" '. + [{"ParameterKey": "ImageURI", "ParameterValue": $imageUri}]' cloudformation/parameters/${{ env.ENVIRONMENT }}.json > $TEMP_PARAM_FILE
