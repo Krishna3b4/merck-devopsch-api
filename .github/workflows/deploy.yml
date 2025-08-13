@@ -124,12 +124,7 @@ jobs:
           fi
           
           # Package the main template
-          aws cloudformation package \
-            --template-file cloudformation/main.yml \
-            --s3-bucket ${{ secrets.CF_BUCKET }} \
-            --s3-prefix "${{ env.ENVIRONMENT }}/infrastructure" \
-            --output-template-file packaged-main.yml \
-            --region ${{ env.AWS_REGION }}
+          aws cloudformation package --template-file cloudformation/main.yml --s3-bucket ${{ secrets.CF_BUCKET }} --s3-prefix "${{ env.ENVIRONMENT }}/infrastructure" --output-template-file packaged-main.yml --region ${{ env.AWS_REGION }}
           
           # Check if stack exists and is in ROLLBACK_COMPLETE state
           STACK_STATUS=$(aws cloudformation describe-stacks --stack-name $STACK_NAME --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "DOES_NOT_EXIST")
@@ -234,12 +229,7 @@ jobs:
           STACK_NAME="${{ env.ENVIRONMENT }}-merck-devops-challenge-main"
           
           # Package the main template
-          aws cloudformation package \
-            --template-file cloudformation/main.yml \
-            --s3-bucket ${{ secrets.CF_BUCKET }} \
-            --s3-prefix "${{ env.ENVIRONMENT }}/infrastructure" \
-            --output-template-file packaged-main.yml \
-            --region ${{ env.AWS_REGION }}
+          aws cloudformation package --template-file cloudformation/main.yml --s3-bucket ${{ secrets.CF_BUCKET }} --s3-prefix "${{ env.ENVIRONMENT }}/infrastructure" --output-template-file packaged-main.yml --region ${{ env.AWS_REGION }}
           
           # Create temporary parameter file with image URI
           TEMP_PARAM_FILE=$(mktemp)
