@@ -110,23 +110,23 @@ jobs:
       - name: Deploy infrastructure
         id: deploy-infra
         run: |
-          # Set stack name with environment prefix
           STACK_NAME="${{ env.ENVIRONMENT }}-merck-devops-challenge-main"
           
-          # Debug S3 bucket info
           echo "Using S3 bucket: ${{ secrets.CF_BUCKET }}"
           echo "AWS Region: ${{ env.AWS_REGION }}"
           
-          # Check if bucket exists and is accessible
           if ! aws s3 ls s3://${{ secrets.CF_BUCKET }}/ --region ${{ env.AWS_REGION }} >/dev/null 2>&1; then
             echo "S3 bucket not accessible. Creating bucket..."
             aws s3 mb s3://${{ secrets.CF_BUCKET }} --region ${{ env.AWS_REGION }}
           fi
           
-          # Package the main template
-          aws cloudformation package --template-file cloudformation/main.yml --s3-bucket ${{ secrets.CF_BUCKET }} --s3-prefix "${{ env.ENVIRONMENT }}/infrastructure" --output-template-file packaged-main.yml --region ${{ env.AWS_REGION }}
+          aws cloudformation package \
+            --template-file cloudformation/main.yml \
+            --s3-bucket ${{ secrets.CF_BUCKET }} \
+            --s3-prefix "${{ env.ENVIRONMENT }}/infrastructure" \
+            --output-template-file packaged-main.yml \
+            --region ${{ env.AWS_REGION }}
           
-          # Check if stack exists and is in ROLLBACK_COMPLETE state
           STACK_STATUS=$(aws cloudformation describe-stacks --stack-name $STACK_NAME --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "DOES_NOT_EXIST")
           
           if [ "$STACK_STATUS" = "ROLLBACK_COMPLETE" ]; then
@@ -136,7 +136,6 @@ jobs:
             echo "Stack deleted successfully"
           fi
           
-          # Deploy with environment-specific parameters
           aws cloudformation deploy \
             --template-file packaged-main.yml \
             --stack-name $STACK_NAME \
@@ -148,12 +147,10 @@ jobs:
             exit 1
           }
           
-          # Wait for stack to be completely ready
           echo "Waiting for stack deployment to complete..."
           aws cloudformation wait stack-create-complete --stack-name $STACK_NAME || \
           aws cloudformation wait stack-update-complete --stack-name $STACK_NAME
           
-          # Get ECR URI from stack outputs
           ECR_URI=$(aws cloudformation describe-stacks \
             --stack-name $STACK_NAME \
             --query 'Stacks[0].Outputs[?OutputKey==`ECRRepositoryURI`].OutputValue' \
@@ -204,7 +201,6 @@ jobs:
           ECR_REGISTRY=${{ needs.deploy-infrastructure.outputs.ecr-uri }}
           ECR_REGISTRY=${ECR_REGISTRY%/*}
           
-          # Build and push image
           docker build -f docker/Dockerfile -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
           docker build -f docker/Dockerfile -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
@@ -225,17 +221,18 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
       - name: Deploy application stack
         run: |
-          # Set stack name with environment prefix
           STACK_NAME="${{ env.ENVIRONMENT }}-merck-devops-challenge-main"
           
-          # Package the main template
-          aws cloudformation package --template-file cloudformation/main.yml --s3-bucket ${{ secrets.CF_BUCKET }} --s3-prefix "${{ env.ENVIRONMENT }}/infrastructure" --output-template-file packaged-main.yml --region ${{ env.AWS_REGION }}
+          aws cloudformation package \
+            --template-file cloudformation/main.yml \
+            --s3-bucket ${{ secrets.CF_BUCKET }} \
+            --s3-prefix "${{ env.ENVIRONMENT }}/infrastructure" \
+            --output-template-file packaged-main.yml \
+            --region ${{ env.AWS_REGION }}
           
-          # Create temporary parameter file with image URI
           TEMP_PARAM_FILE=$(mktemp)
           jq --arg imageUri "${{ needs.build.outputs.image-uri }}" '. + [{"ParameterKey": "ImageURI", "ParameterValue": $imageUri}]' cloudformation/parameters/${{ env.ENVIRONMENT }}.json > $TEMP_PARAM_FILE
           
-          # Check if stack exists and is in ROLLBACK_COMPLETE state
           STACK_STATUS=$(aws cloudformation describe-stacks --stack-name $STACK_NAME --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "DOES_NOT_EXIST")
           
           if [ "$STACK_STATUS" = "ROLLBACK_COMPLETE" ]; then
@@ -245,7 +242,6 @@ jobs:
             echo "Stack deleted successfully"
           fi
           
-          # Update stack with new image
           aws cloudformation deploy \
             --template-file packaged-main.yml \
             --stack-name $STACK_NAME \
@@ -253,21 +249,17 @@ jobs:
             --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
             --no-fail-on-empty-changeset
           
-          # Wait for stack update to complete
           echo "Waiting for application update to complete..."
           aws cloudformation wait stack-update-complete --stack-name $STACK_NAME
           
-          # Clean up temporary file
           rm -f $TEMP_PARAM_FILE
           
-          # Create demo user in Cognito (only for dev environment)
           if [ "${{ env.ENVIRONMENT }}" = "d" ]; then
             USER_POOL_ID=$(aws cloudformation describe-stacks \
               --stack-name $STACK_NAME \
               --query 'Stacks[0].Outputs[?OutputKey==`UserPoolId`].OutputValue' \
               --output text)
             
-            # Get credentials from Secrets Manager
             SECRET_VALUE=$(aws secretsmanager get-secret-value \
               --secret-id "${{ env.ENVIRONMENT }}-merck-devops-challenge-demo-user" \
               --query 'SecretString' --output text)
@@ -275,7 +267,6 @@ jobs:
             USERNAME=$(echo $SECRET_VALUE | jq -r '.username')
             PASSWORD=$(echo $SECRET_VALUE | jq -r '.password')
             
-            # Create demo user (ignore if already exists)
             aws cognito-idp admin-create-user \
               --user-pool-id $USER_POOL_ID \
               --username $USERNAME \
@@ -283,7 +274,6 @@ jobs:
               --temporary-password TempPass123! \
               --message-action SUPPRESS || echo "Demo user already exists"
             
-            # Set permanent password
             aws cognito-idp admin-set-user-password \
               --user-pool-id $USER_POOL_ID \
               --username $USERNAME \
