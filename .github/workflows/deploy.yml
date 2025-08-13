@@ -121,6 +121,16 @@ jobs:
             --output-template-file packaged-main.yml \
             --region ${{ env.AWS_REGION }}
           
+          # Check if stack exists and is in ROLLBACK_COMPLETE state
+          STACK_STATUS=$(aws cloudformation describe-stacks --stack-name $STACK_NAME --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "DOES_NOT_EXIST")
+          
+          if [ "$STACK_STATUS" = "ROLLBACK_COMPLETE" ]; then
+            echo "Stack is in ROLLBACK_COMPLETE state, deleting it first..."
+            aws cloudformation delete-stack --stack-name $STACK_NAME
+            aws cloudformation wait stack-delete-complete --stack-name $STACK_NAME
+            echo "Stack deleted successfully"
+          fi
+          
           # Deploy with environment-specific parameters
           aws cloudformation deploy \
             --template-file packaged-main.yml \
@@ -220,6 +230,16 @@ jobs:
           # Create temporary parameter file with image URI
           TEMP_PARAM_FILE=$(mktemp)
           jq --arg imageUri "${{ needs.build.outputs.image-uri }}" '. + [{"ParameterKey": "ImageURI", "ParameterValue": $imageUri}]' cloudformation/parameters/${{ env.ENVIRONMENT }}.json > $TEMP_PARAM_FILE
+          
+          # Check if stack exists and is in ROLLBACK_COMPLETE state
+          STACK_STATUS=$(aws cloudformation describe-stacks --stack-name $STACK_NAME --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "DOES_NOT_EXIST")
+          
+          if [ "$STACK_STATUS" = "ROLLBACK_COMPLETE" ]; then
+            echo "Stack is in ROLLBACK_COMPLETE state, deleting it first..."
+            aws cloudformation delete-stack --stack-name $STACK_NAME
+            aws cloudformation wait stack-delete-complete --stack-name $STACK_NAME
+            echo "Stack deleted successfully"
+          fi
           
           # Update stack with new image
           aws cloudformation deploy \
