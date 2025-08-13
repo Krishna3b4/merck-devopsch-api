@@ -4,19 +4,53 @@ Description: ECS compute infrastructure for Merck DevOps Challenge
 Parameters:
   Environment:
     Type: String
-    Default: dev
-    AllowedValues: [dev, staging, prod]
+    AllowedValues: [d, s, p]
+    Description: Environment (d=dev, s=staging, p=prod)
   
   ImageURI:
     Type: String
     Description: ECR image URI
-    Default: "495762952500.dkr.ecr.us-east-1.amazonaws.com/d-devops-challenge-ecr-repo:latest"
+
+Conditions:
+  IsPlaceholderImage: !Equals [!Ref ImageURI, "public.ecr.aws/docker/library/hello-world:latest"]
+
+  VpcId:
+    Type: String
+    Description: VPC ID from network stack
+
+  PublicSubnet1Id:
+    Type: String
+    Description: Public subnet 1 ID
+
+  PublicSubnet2Id:
+    Type: String
+    Description: Public subnet 2 ID
+
+  PrivateSubnet1Id:
+    Type: String
+    Description: Private subnet 1 ID
+
+  PrivateSubnet2Id:
+    Type: String
+    Description: Private subnet 2 ID
+
+  UserPoolId:
+    Type: String
+    Description: Cognito User Pool ID
+
+  UserPoolClientId:
+    Type: String
+    Description: Cognito User Pool Client ID
+
+  SecretArn:
+    Type: String
+    Description: Secrets Manager ARN for demo user
 
 Resources:
   ECSCluster:
     Type: AWS::ECS::Cluster
     Properties:
-      ClusterName: !Sub d-devops-challenge-ecs-cluster
+      ClusterName: !Sub ${Environment}-merck-devops-challenge-ecs-cluster
       CapacityProviders:
         - FARGATE
       DefaultCapacityProviderStrategy:
@@ -55,12 +89,17 @@ Resources:
                 Action:
                   - cognito-idp:AdminInitiateAuth
                   - cognito-idp:GetUser
-                Resource: '*'
+                  - cognito-idp:AdminCreateUser
+                  - cognito-idp:AdminSetUserPassword
+                  - secretsmanager:GetSecretValue
+                Resource: 
+                  - '*'
+                  - !Ref SecretArn
 
   TaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
-      Family: !Sub d-devops-challenge-task-definition
+      Family: !Sub ${Environment}-merck-devops-challenge-task-definition
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
@@ -84,26 +123,23 @@ Resources:
             - Name: ENV
               Value: !Ref Environment
             - Name: COGNITO_USER_POOL_ID
-              Value:
-                Fn::ImportValue: !Sub ${Environment}-cognito-user-pool-id
+              Value: !Ref UserPoolId
             - Name: COGNITO_CLIENT_ID
-              Value:
-                Fn::ImportValue: !Sub ${Environment}-cognito-client-id
+              Value: !Ref UserPoolClientId
             - Name: AWS_REGION
               Value: !Ref AWS::Region
 
   LogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub /ecs/d-devops-challenge-api
+      LogGroupName: !Sub /ecs/${Environment}-merck-devops-challenge-api
       RetentionInDays: 7
 
   SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Security group for ECS service
-      VpcId:
-        Fn::ImportValue: !Sub d-devops-challenge-vpc-id
+      VpcId: !Ref VpcId
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 8000
@@ -114,8 +150,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Security group for ALB
-      VpcId:
-        Fn::ImportValue: !Sub d-devops-challenge-vpc-id
+      VpcId: !Ref VpcId
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 80
@@ -125,23 +160,22 @@ Resources:
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub d-devops-challenge-alb
+      Name: !Sub ${Environment}-merck-devops-challenge-alb
       Scheme: internet-facing
       Type: application
       Subnets:
-        - Fn::ImportValue: !Sub d-devops-challenge-public-subnet1-id
-        - Fn::ImportValue: !Sub d-devops-challenge-public-subnet2-id
+        - !Ref PublicSubnet1Id
+        - !Ref PublicSubnet2Id
       SecurityGroups:
         - !Ref ALBSecurityGroup
 
   TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub d-devops-challenge-target-group
+      Name: !Sub ${Environment}-merck-devops-challenge-target-group
       Port: 8000
       Protocol: HTTP
-      VpcId:
-        Fn::ImportValue: !Sub d-devops-challenge-vpc-id
+      VpcId: !Ref VpcId
       TargetType: ip
       HealthCheckPath: /health
       HealthCheckProtocol: HTTP
@@ -163,18 +197,18 @@ Resources:
     Type: AWS::ECS::Service
     DependsOn: Listener
     Properties:
-      ServiceName: !Sub d-devops-challenge-ecs-service
+      ServiceName: !Sub ${Environment}-merck-devops-challenge-ecs-service
       Cluster: !Ref ECSCluster
       TaskDefinition: !Ref TaskDefinition
-      DesiredCount: 1
+      DesiredCount: !If [IsPlaceholderImage, 0, 1]
       LaunchType: FARGATE
       NetworkConfiguration:
         AwsvpcConfiguration:
           SecurityGroups:
             - !Ref SecurityGroup
           Subnets:
-            - Fn::ImportValue: !Sub d-devops-challenge-private-subnet1-id
-            - Fn::ImportValue: !Sub d-devops-challenge-private-subnet2-id
+            - !Ref PrivateSubnet1Id
+            - !Ref PrivateSubnet2Id
           AssignPublicIp: DISABLED
       LoadBalancers:
         - ContainerName: api
@@ -185,5 +219,11 @@ Outputs:
   LoadBalancerURL:
     Description: Load Balancer URL
     Value: !Sub http://${ApplicationLoadBalancer.DNSName}
-    Export:
-      Name: !Sub ${Environment}-LoadBalancer-URL
+
+  ECSClusterName:
+    Description: ECS Cluster Name
+    Value: !Ref ECSCluster
+
+  ECSServiceName:
+    Description: ECS Service Name
+    Value: !Ref ECSService

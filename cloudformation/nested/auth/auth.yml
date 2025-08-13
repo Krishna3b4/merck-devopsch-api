@@ -4,14 +4,14 @@ Description: Cognito authentication for Merck DevOps Challenge
 Parameters:
   Environment:
     Type: String
-    Default: dev
-    AllowedValues: [dev, staging, prod]
+    AllowedValues: [d, s, p]
+    Description: Environment (d=dev, s=staging, p=prod)
 
 Resources:
   UserPool:
     Type: AWS::Cognito::UserPool
     Properties:
-      UserPoolName: !Sub ${Environment}-merck-devops-challenge
+      UserPoolName: !Sub ${Environment}-merck-devops-challenge-users
       Policies:
         PasswordPolicy:
           MinimumLength: 8
@@ -33,7 +33,7 @@ Resources:
     Type: AWS::Cognito::UserPoolClient
     Properties:
       UserPoolId: !Ref UserPool
-      ClientName: !Sub ${Environment}-merck-api-client
+      ClientName: !Sub ${Environment}-merck-devops-challenge-client
       GenerateSecret: false
       ExplicitAuthFlows:
         - ADMIN_NO_SRP_AUTH
@@ -52,11 +52,7 @@ Outputs:
   UserPoolId:
     Description: Cognito User Pool ID
     Value: !Ref UserPool
-    Export:
-      Name: !Sub ${Environment}-cognito-user-pool-id
 
   UserPoolClientId:
     Description: Cognito User Pool Client ID
     Value: !Ref UserPoolClient
-    Export:
-      Name: !Sub ${Environment}-cognito-client-id

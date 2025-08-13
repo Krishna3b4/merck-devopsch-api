@@ -4,68 +4,93 @@ Description: Network infrastructure for Merck DevOps Challenge
 Parameters:
   Environment:
     Type: String
-    Default: dev
-    AllowedValues: [dev, staging, prod]
+    AllowedValues: [d, s, p]
+    Description: Environment (d=dev, s=staging, p=prod)
+
+  VpcCidr:
+    Type: String
+    Default: 10.0.0.0/16
+    Description: CIDR block for VPC
+
+  PublicSubnet1Cidr:
+    Type: String
+    Default: 10.0.1.0/24
+    Description: CIDR block for public subnet 1
+
+  PublicSubnet2Cidr:
+    Type: String
+    Default: 10.0.2.0/24
+    Description: CIDR block for public subnet 2
+
+  PrivateSubnet1Cidr:
+    Type: String
+    Default: 10.0.3.0/24
+    Description: CIDR block for private subnet 1
+
+  PrivateSubnet2Cidr:
+    Type: String
+    Default: 10.0.4.0/24
+    Description: CIDR block for private subnet 2
 
 Resources:
   VPC:
     Type: AWS::EC2::VPC
     Properties:
-      CidrBlock: 10.0.0.0/16
+      CidrBlock: !Ref VpcCidr
       EnableDnsHostnames: true
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: d-devops-challenge-vpc
+          Value: !Sub ${Environment}-merck-devops-challenge-vpc
 
   PublicSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: 10.0.1.0/24
+      CidrBlock: !Ref PublicSubnet1Cidr
       AvailabilityZone: !Select [0, !GetAZs '']
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: d-devops-challenge-public-subnet-1
+          Value: !Sub ${Environment}-merck-devops-challenge-public-subnet-1
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: 10.0.2.0/24
+      CidrBlock: !Ref PublicSubnet2Cidr
       AvailabilityZone: !Select [1, !GetAZs '']
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: d-devops-challenge-public-subnet-2
+          Value: !Sub ${Environment}-merck-devops-challenge-public-subnet-2
 
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: 10.0.3.0/24
+      CidrBlock: !Ref PrivateSubnet1Cidr
       AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
-          Value: d-devops-challenge-private-subnet-1
+          Value: !Sub ${Environment}-merck-devops-challenge-private-subnet-1
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: 10.0.4.0/24
+      CidrBlock: !Ref PrivateSubnet2Cidr
       AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
-          Value: d-devops-challenge-private-subnet-2
+          Value: !Sub ${Environment}-merck-devops-challenge-private-subnet-2
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
         - Key: Name
-          Value: d-devops-challenge-igw
+          Value: !Sub ${Environment}-merck-devops-challenge-igw
 
   AttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -79,7 +104,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: d-devops-challenge-public-rt
+          Value: !Sub ${Environment}-merck-devops-challenge-public-rt
 
   PublicRoute:
     Type: AWS::EC2::Route
@@ -108,7 +133,7 @@ Resources:
       SubnetId: !Ref PublicSubnet1
       Tags:
         - Key: Name
-          Value: d-devops-challenge-nat-gateway-1
+          Value: !Sub ${Environment}-merck-devops-challenge-nat-gateway-1
 
   EIPForNAT1:
     Type: AWS::EC2::EIP
@@ -122,7 +147,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: d-devops-challenge-private-rt-1
+          Value: !Sub ${Environment}-merck-devops-challenge-private-rt-1
 
   PrivateRoute1:
     Type: AWS::EC2::Route
@@ -197,38 +222,28 @@ Resources:
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
-          CidrIp: 10.0.0.0/16
+          CidrIp: !Ref VpcCidr
       Tags:
         - Key: Name
-          Value: d-devops-challenge-vpc-endpoint-sg
+          Value: !Sub ${Environment}-merck-devops-challenge-vpc-endpoint-sg
 
 Outputs:
-  VPCId:
+  VpcId:
     Description: VPC ID
     Value: !Ref VPC
-    Export:
-      Name: !Sub d-devops-challenge-vpc-id
 
   PublicSubnet1Id:
     Description: Public Subnet 1 ID
     Value: !Ref PublicSubnet1
-    Export:
-      Name: !Sub d-devops-challenge-public-subnet1-id
 
   PublicSubnet2Id:
     Description: Public Subnet 2 ID
     Value: !Ref PublicSubnet2
-    Export:
-      Name: !Sub d-devops-challenge-public-subnet2-id
 
   PrivateSubnet1Id:
     Description: Private Subnet 1 ID
     Value: !Ref PrivateSubnet1
-    Export:
-      Name: !Sub d-devops-challenge-private-subnet1-id
 
   PrivateSubnet2Id:
     Description: Private Subnet 2 ID
     Value: !Ref PrivateSubnet2
-    Export:
-      Name: !Sub d-devops-challenge-private-subnet2-id

@@ -4,14 +4,14 @@ Description: ECR repository for Merck DevOps Challenge
 Parameters:
   Environment:
     Type: String
-    Default: dev
-    AllowedValues: [dev, staging, prod]
+    AllowedValues: [d, s, p]
+    Description: Environment (d=dev, s=staging, p=prod)
 
 Resources:
   ECRRepository:
     Type: AWS::ECR::Repository
     Properties:
-      RepositoryName: d-devops-challenge-ecr-repo
+      RepositoryName: !Sub ${Environment}-merck-devops-challenge-ecr-repo
       ImageTagMutability: MUTABLE
       ImageScanningConfiguration:
         ScanOnPush: true
@@ -35,8 +35,10 @@ Resources:
           }
 
 Outputs:
-  ECRRepositoryURI:
+  RepositoryURI:
     Description: ECR Repository URI
     Value: !GetAtt ECRRepository.RepositoryUri
-    Export:
-      Name: !Sub ${Environment}-ecr-repository-uri
+
+  RepositoryName:
+    Description: ECR Repository Name
+    Value: !Ref ECRRepository

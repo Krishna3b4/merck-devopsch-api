@@ -1,35 +1,107 @@
 AWSTemplateFormatVersion: 2010-09-09
-Description: Root stack for Merck DevOps Challenge
+Description: Main stack for Merck DevOps Challenge
 
 Parameters:
   Environment:
     Type: String
-    Default: dev
-    AllowedValues: [dev, staging, prod]
-    Description: Environment name
-  
+    Default: d
+    AllowedValues: [d, s, p]
+    Description: Environment (d=dev, s=staging, p=prod)
+
   ImageURI:
     Type: String
     Description: ECR image URI for the application
-    Default: "495762952500.dkr.ecr.us-east-1.amazonaws.com/d-devops-challenge-ecr-repo:latest"
+    Default: ""
+
+  VpcCidr:
+    Type: String
+    Default: 10.0.0.0/16
+    Description: CIDR block for VPC
+
+  PublicSubnet1Cidr:
+    Type: String
+    Default: 10.0.1.0/24
+    Description: CIDR block for public subnet 1
+
+  PublicSubnet2Cidr:
+    Type: String
+    Default: 10.0.2.0/24
+    Description: CIDR block for public subnet 2
+
+  PrivateSubnet1Cidr:
+    Type: String
+    Default: 10.0.3.0/24
+    Description: CIDR block for private subnet 1
+
+  PrivateSubnet2Cidr:
+    Type: String
+    Default: 10.0.4.0/24
+    Description: CIDR block for private subnet 2
+
+Conditions:
+  HasImageURI: !Not [!Equals [!Ref ImageURI, ""]]
+  IsPlaceholderImage: !Equals [!Ref ImageURI, "public.ecr.aws/docker/library/hello-world:latest"]
 
 Resources:
+  # ECR Repository Stack
+  ECRStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: nested/repo/repo.yml
+      Parameters:
+        Environment: !Ref Environment
+
+  # Network Stack
   NetworkStack:
     Type: AWS::CloudFormation::Stack
     Properties:
       TemplateURL: nested/network/network.yml
       Parameters:
         Environment: !Ref Environment
+        VpcCidr: !Ref VpcCidr
+        PublicSubnet1Cidr: !Ref PublicSubnet1Cidr
+        PublicSubnet2Cidr: !Ref PublicSubnet2Cidr
+        PrivateSubnet1Cidr: !Ref PrivateSubnet1Cidr
+        PrivateSubnet2Cidr: !Ref PrivateSubnet2Cidr
 
+  # Secrets Stack
+  SecretsStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: nested/secrets/secrets.yml
+      Parameters:
+        Environment: !Ref Environment
+
+  # Authentication Stack
+  AuthStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: nested/auth/auth.yml
+      Parameters:
+        Environment: !Ref Environment
+
+  # Compute Stack
   ComputeStack:
     Type: AWS::CloudFormation::Stack
-    DependsOn: NetworkStack
+    DependsOn: [NetworkStack, AuthStack, ECRStack, SecretsStack]
     Properties:
       TemplateURL: nested/compute/compute.yml
       Parameters:
         Environment: !Ref Environment
-        ImageURI: !Ref ImageURI
+        VpcId: !GetAtt NetworkStack.Outputs.VpcId
+        PublicSubnet1Id: !GetAtt NetworkStack.Outputs.PublicSubnet1Id
+        PublicSubnet2Id: !GetAtt NetworkStack.Outputs.PublicSubnet2Id
+        PrivateSubnet1Id: !GetAtt NetworkStack.Outputs.PrivateSubnet1Id
+        PrivateSubnet2Id: !GetAtt NetworkStack.Outputs.PrivateSubnet2Id
+        UserPoolId: !GetAtt AuthStack.Outputs.UserPoolId
+        UserPoolClientId: !GetAtt AuthStack.Outputs.UserPoolClientId
+        SecretArn: !GetAtt SecretsStack.Outputs.SecretArn
+        ImageURI: !If 
+          - HasImageURI
+          - !Ref ImageURI
+          - "public.ecr.aws/docker/library/hello-world:latest"
 
+  # Monitoring Stack
   MonitoringStack:
     Type: AWS::CloudFormation::Stack
     DependsOn: ComputeStack
@@ -37,13 +109,22 @@ Resources:
       TemplateURL: nested/monitoring/monitoring.yml
       Parameters:
         Environment: !Ref Environment
+        ECSClusterName: !GetAtt ComputeStack.Outputs.ECSClusterName
+        ECSServiceName: !GetAtt ComputeStack.Outputs.ECSServiceName
 
 Outputs:
   ApplicationURL:
     Description: Application Load Balancer URL
-    Value:
-      Fn::GetAtt:
-        - ComputeStack
-        - Outputs.LoadBalancerURL
-    Export:
-      Name: !Sub ${Environment}-Application-URL
+    Value: !GetAtt ComputeStack.Outputs.LoadBalancerURL
+
+  ECRRepositoryURI:
+    Description: ECR Repository URI
+    Value: !GetAtt ECRStack.Outputs.RepositoryURI
+
+  UserPoolId:
+    Description: Cognito User Pool ID
+    Value: !GetAtt AuthStack.Outputs.UserPoolId
+
+  UserPoolClientId:
+    Description: Cognito User Pool Client ID
+    Value: !GetAtt AuthStack.Outputs.UserPoolClientId

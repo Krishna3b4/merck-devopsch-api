@@ -13,9 +13,9 @@ on:
         default: 'dev'
         type: choice
         options:
-        - dev
-        - staging
-        - prod
+        - d
+        - s
+        - p
       force_full_deploy:
         description: 'Force full deployment'
         required: false
@@ -24,7 +24,7 @@ on:
 
 env:
   AWS_REGION: us-east-1
-  ENVIRONMENT: ${{ github.event.inputs.environment || 'dev' }}
+  ENVIRONMENT: ${{ github.event.inputs.environment || 'd' }}
 
 jobs:
   detect-changes:
@@ -43,16 +43,13 @@ jobs:
           filters: |
             infra:
               - 'cloudformation/**'
-              - 'deploy-*.yml'
             app:
               - 'app/**'
-              - 'requirements.txt'
-              - 'Dockerfile'
+              - 'docker/**'
             deploy:
               - 'cloudformation/**'
               - 'app/**'
-              - 'requirements.txt'
-              - 'Dockerfile'
+              - 'docker/**'
               - '.github/workflows/**'
 
   lint-and-validate:
@@ -69,10 +66,10 @@ jobs:
           pip install cfn-lint
       - name: Python code formatting
         run: |
-          black app/
+          black --config app/pyproject.toml app/
       - name: Python import sorting
         run: |
-          isort app/
+          isort --settings-path app/pyproject.toml app/
       - name: Python linting
         run: |
           flake8 app/ --max-line-length=88 --extend-ignore=E203,W503
@@ -113,118 +110,35 @@ jobs:
       - name: Deploy infrastructure
         id: deploy-infra
         run: |
-          # Deploy ECR repository first
-          aws cloudformation package \
-            --template-file cloudformation/nested/repo/repo.yml \
-            --s3-bucket ${{ secrets.CF_BUCKET }} \
-            --output-template-file packaged-repo.yml
+          # Set stack name with environment prefix
+          STACK_NAME="${{ env.ENVIRONMENT }}-merck-devops-challenge-main"
           
+          # Package the main template
+          aws cloudformation package \
+            --template-file cloudformation/main.yml \
+            --s3-bucket ${{ secrets.CF_BUCKET }} \
+            --s3-prefix "${{ env.ENVIRONMENT }}/infrastructure" \
+            --output-template-file packaged-main.yml
+          
+          # Deploy with environment-specific parameters
           aws cloudformation deploy \
-            --template-file packaged-repo.yml \
-            --stack-name d-devops-challenge-repo \
-            --parameter-overrides Environment=${{ env.ENVIRONMENT }} \
-            --capabilities CAPABILITY_IAM \
+            --template-file packaged-main.yml \
+            --stack-name $STACK_NAME \
+            --parameter-overrides file://cloudformation/parameters/${{ env.ENVIRONMENT }}.json \
+            --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
             --no-fail-on-empty-changeset
           
-          # Wait for repo stack
-          aws cloudformation wait stack-create-complete \
-            --stack-name d-devops-challenge-repo || \
-          aws cloudformation wait stack-update-complete \
-            --stack-name d-devops-challenge-repo
+          # Wait for stack to be completely ready
+          echo "Waiting for stack deployment to complete..."
+          aws cloudformation wait stack-create-complete --stack-name $STACK_NAME || \
+          aws cloudformation wait stack-update-complete --stack-name $STACK_NAME
           
-          # Get ECR URI from CloudFormation output
+          # Get ECR URI from stack outputs
           ECR_URI=$(aws cloudformation describe-stacks \
-            --stack-name d-devops-challenge-repo \
+            --stack-name $STACK_NAME \
             --query 'Stacks[0].Outputs[?OutputKey==`ECRRepositoryURI`].OutputValue' \
             --output text)
           echo "ecr-uri=$ECR_URI" >> $GITHUB_OUTPUT
-          
-          # Package and deploy network stack
-          aws cloudformation package \
-            --template-file cloudformation/nested/network/network.yml \
-            --s3-bucket ${{ secrets.CF_BUCKET }} \
-            --output-template-file packaged-network.yml
-          
-          aws cloudformation deploy \
-            --template-file packaged-network.yml \
-            --stack-name d-devops-challenge-network \
-            --parameter-overrides Environment=${{ env.ENVIRONMENT }} \
-            --capabilities CAPABILITY_IAM \
-            --no-fail-on-empty-changeset
-          
-          # Wait for network stack to be completely ready
-          aws cloudformation wait stack-create-complete \
-            --stack-name d-devops-challenge-network || \
-          aws cloudformation wait stack-update-complete \
-            --stack-name d-devops-challenge-network
-          
-          # Package and deploy auth stack first
-          aws cloudformation package \
-            --template-file cloudformation/nested/auth/auth.yml \
-            --s3-bucket ${{ secrets.CF_BUCKET }} \
-            --output-template-file packaged-auth.yml
-          
-          # Check if auth stack exists and is in ROLLBACK_COMPLETE state
-          STACK_STATUS=$(aws cloudformation describe-stacks --stack-name d-devops-challenge-auth --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "DOES_NOT_EXIST")
-          
-          if [ "$STACK_STATUS" = "ROLLBACK_COMPLETE" ]; then
-            echo "Deleting failed auth stack..."
-            aws cloudformation delete-stack --stack-name d-devops-challenge-auth
-            aws cloudformation wait stack-delete-complete --stack-name d-devops-challenge-auth
-          fi
-          
-          aws cloudformation deploy \
-            --template-file packaged-auth.yml \
-            --stack-name d-devops-challenge-auth \
-            --parameter-overrides Environment=${{ env.ENVIRONMENT }} \
-            --capabilities CAPABILITY_IAM \
-            --no-fail-on-empty-changeset
-          
-          # Wait for auth stack
-          aws cloudformation wait stack-create-complete \
-            --stack-name d-devops-challenge-auth || \
-          aws cloudformation wait stack-update-complete \
-            --stack-name d-devops-challenge-auth
-          
-          # Package and deploy compute stack
-          aws cloudformation package \
-            --template-file cloudformation/nested/compute/compute.yml \
-            --s3-bucket ${{ secrets.CF_BUCKET }} \
-            --output-template-file packaged-compute.yml
-          
-          aws cloudformation deploy \
-            --template-file packaged-compute.yml \
-            --stack-name d-devops-challenge-compute \
-            --parameter-overrides \
-              Environment=${{ env.ENVIRONMENT }} \
-              ImageURI=$ECR_URI:latest \
-            --capabilities CAPABILITY_IAM \
-            --no-fail-on-empty-changeset
-          
-          # Wait for compute stack to be completely ready
-          aws cloudformation wait stack-create-complete \
-            --stack-name d-devops-challenge-compute || \
-          aws cloudformation wait stack-update-complete \
-            --stack-name d-devops-challenge-compute
-          
-          # Package and deploy monitoring stack
-          aws cloudformation package \
-            --template-file cloudformation/nested/monitoring/monitoring.yml \
-            --s3-bucket ${{ secrets.CF_BUCKET }} \
-            --output-template-file packaged-monitoring.yml
-          
-          aws cloudformation deploy \
-            --template-file packaged-monitoring.yml \
-            --stack-name d-devops-challenge-monitoring \
-            --parameter-overrides Environment=${{ env.ENVIRONMENT }} \
-            --capabilities CAPABILITY_IAM \
-            --no-fail-on-empty-changeset
-          
-          # Wait for monitoring stack to be completely ready
-          aws cloudformation wait stack-create-complete \
-            --stack-name d-devops-challenge-monitoring || \
-          aws cloudformation wait stack-update-complete \
-            --stack-name d-devops-challenge-monitoring
 
   test:
     needs: [deploy-infrastructure, lint-and-validate]
@@ -238,7 +152,7 @@ jobs:
           python-version: '3.11'
       - name: Install dependencies
         run: |
-          pip install -r requirements.txt
+          pip install -r app/requirements.txt
           pip install pytest httpx
       - name: Run tests
         run: |
@@ -264,15 +178,15 @@ jobs:
       - name: Build and push image
         id: build-image
         env:
-          ECR_REPOSITORY: d-devops-challenge-ecr-repo
+          ECR_REPOSITORY: ${{ env.ENVIRONMENT }}-merck-devops-challenge-ecr-repo
           IMAGE_TAG: ${{ github.sha }}
         run: |
           ECR_REGISTRY=${{ needs.deploy-infrastructure.outputs.ecr-uri }}
           ECR_REGISTRY=${ECR_REGISTRY%/*}
           
           # Build and push image
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
+          docker build -f docker/Dockerfile -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker build -f docker/Dockerfile -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
           echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
@@ -291,72 +205,75 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
       - name: Deploy application stack
         run: |
-          # Package and deploy compute stack
-          aws cloudformation package \
-            --template-file cloudformation/nested/compute/compute.yml \
-            --s3-bucket ${{ secrets.CF_BUCKET }} \
-            --output-template-file packaged-compute.yml
+          # Set stack name with environment prefix
+          STACK_NAME="${{ env.ENVIRONMENT }}-merck-devops-challenge-main"
           
+          # Package the main template
+          aws cloudformation package \
+            --template-file cloudformation/main.yml \
+            --s3-bucket ${{ secrets.CF_BUCKET }} \
+            --s3-prefix "${{ env.ENVIRONMENT }}/infrastructure" \
+            --output-template-file packaged-main.yml
+          
+          # Create temporary parameter file with image URI
+          TEMP_PARAM_FILE=$(mktemp)
+          jq --arg imageUri "${{ needs.build.outputs.image-uri }}" '. + [{"ParameterKey": "ImageURI", "ParameterValue": $imageUri}]' cloudformation/parameters/${{ env.ENVIRONMENT }}.json > $TEMP_PARAM_FILE
+          
+          # Update stack with new image
           aws cloudformation deploy \
-            --template-file packaged-compute.yml \
-            --stack-name d-devops-challenge-compute \
-            --parameter-overrides \
-              Environment=${{ env.ENVIRONMENT }} \
-              ImageURI=${{ needs.build.outputs.image-uri }} \
-            --capabilities CAPABILITY_IAM \
+            --template-file packaged-main.yml \
+            --stack-name $STACK_NAME \
+            --parameter-overrides file://$TEMP_PARAM_FILE \
+            --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
             --no-fail-on-empty-changeset
           
-          # Wait for compute stack to be completely ready
-          aws cloudformation wait stack-create-complete \
-            --stack-name d-devops-challenge-compute || \
-          aws cloudformation wait stack-update-complete \
-            --stack-name d-devops-challenge-compute
+          # Wait for stack update to complete
+          echo "Waiting for application update to complete..."
+          aws cloudformation wait stack-update-complete --stack-name $STACK_NAME
           
-          # Deploy monitoring stack
-          aws cloudformation package \
-            --template-file cloudformation/nested/monitoring/monitoring.yml \
-            --s3-bucket ${{ secrets.CF_BUCKET }} \
-            --output-template-file packaged-monitoring.yml
+          # Clean up temporary file
+          rm -f $TEMP_PARAM_FILE
           
-          aws cloudformation deploy \
-            --template-file packaged-monitoring.yml \
-            --stack-name d-devops-challenge-monitoring \
-            --parameter-overrides Environment=${{ env.ENVIRONMENT }} \
-            --capabilities CAPABILITY_IAM \
-            --no-fail-on-empty-changeset
-          
-          # Wait for monitoring stack to be completely ready
-          aws cloudformation wait stack-create-complete \
-            --stack-name d-devops-challenge-monitoring || \
-          aws cloudformation wait stack-update-complete \
-            --stack-name d-devops-challenge-monitoring
-          
-          # Create demo user in Cognito
-          USER_POOL_ID=$(aws cloudformation describe-stacks \
-            --stack-name d-devops-challenge-auth \
-            --query 'Stacks[0].Outputs[?OutputKey==`UserPoolId`].OutputValue' \
-            --output text)
-          
-          # Create demo user (ignore if already exists)
-          aws cognito-idp admin-create-user \
-            --user-pool-id $USER_POOL_ID \
-            --username demo \
-            --user-attributes Name=email,Value=demo@merck-challenge.com Name=email_verified,Value=true \
-            --temporary-password TempPass123! \
-            --message-action SUPPRESS || echo "Demo user already exists"
-          
-          # Set permanent password
-          aws cognito-idp admin-set-user-password \
-            --user-pool-id $USER_POOL_ID \
-            --username demo \
-            --password password123 \
-            --permanent || echo "Password already set"
+          # Create demo user in Cognito (only for dev environment)
+          if [ "${{ env.ENVIRONMENT }}" = "d" ]; then
+            USER_POOL_ID=$(aws cloudformation describe-stacks \
+              --stack-name $STACK_NAME \
+              --query 'Stacks[0].Outputs[?OutputKey==`UserPoolId`].OutputValue' \
+              --output text)
+            
+            # Get credentials from Secrets Manager
+            SECRET_VALUE=$(aws secretsmanager get-secret-value \
+              --secret-id "${{ env.ENVIRONMENT }}-merck-devops-challenge-demo-user" \
+              --query 'SecretString' --output text)
+            
+            USERNAME=$(echo $SECRET_VALUE | jq -r '.username')
+            PASSWORD=$(echo $SECRET_VALUE | jq -r '.password')
+            
+            # Create demo user (ignore if already exists)
+            aws cognito-idp admin-create-user \
+              --user-pool-id $USER_POOL_ID \
+              --username $USERNAME \
+              --user-attributes Name=email,Value=$USERNAME Name=email_verified,Value=true \
+              --temporary-password TempPass123! \
+              --message-action SUPPRESS || echo "Demo user already exists"
+            
+            # Set permanent password
+            aws cognito-idp admin-set-user-password \
+              --user-pool-id $USER_POOL_ID \
+              --username $USERNAME \
+              --password $PASSWORD \
+              --permanent || echo "Password already set"
+            
+            echo "Demo user created: $USERNAME"
+            echo "Password stored in Secrets Manager: ${{ env.ENVIRONMENT }}-merck-devops-challenge-demo-user"
+          fi
       
       - name: Get application URL
         run: |
+          STACK_NAME="${{ env.ENVIRONMENT }}-merck-devops-challenge-main"
           URL=$(aws cloudformation describe-stacks \
-            --stack-name d-devops-challenge-compute \
-            --query 'Stacks[0].Outputs[?OutputKey==`LoadBalancerURL`].OutputValue' \
+            --stack-name $STACK_NAME \
+            --query 'Stacks[0].Outputs[?OutputKey==`ApplicationURL`].OutputValue' \
             --output text)
           echo "🚀 Application deployed at: $URL"
           echo "📋 Test endpoints:"

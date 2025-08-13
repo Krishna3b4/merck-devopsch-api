@@ -4,14 +4,22 @@ Description: Monitoring and logging for Merck DevOps Challenge
 Parameters:
   Environment:
     Type: String
-    Default: dev
-    AllowedValues: [dev, staging, prod]
+    AllowedValues: [d, s, p]
+    Description: Environment (d=dev, s=staging, p=prod)
+
+  ECSClusterName:
+    Type: String
+    Description: ECS Cluster Name
+
+  ECSServiceName:
+    Type: String
+    Description: ECS Service Name
 
 Resources:
   Dashboard:
     Type: AWS::CloudWatch::Dashboard
     Properties:
-      DashboardName: !Sub d-devops-challenge-dashboard
+      DashboardName: !Sub ${Environment}-merck-devops-challenge-dashboard
       DashboardBody: !Sub |
         {
           "widgets": [
