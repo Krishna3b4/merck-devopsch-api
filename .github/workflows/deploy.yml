@@ -118,7 +118,8 @@ jobs:
             --template-file cloudformation/main.yml \
             --s3-bucket ${{ secrets.CF_BUCKET }} \
             --s3-prefix "${{ env.ENVIRONMENT }}/infrastructure" \
-            --output-template-file packaged-main.yml
+            --output-template-file packaged-main.yml \
+            --region ${{ env.AWS_REGION }}
           
           # Deploy with environment-specific parameters
           aws cloudformation deploy \
@@ -213,7 +214,8 @@ jobs:
             --template-file cloudformation/main.yml \
             --s3-bucket ${{ secrets.CF_BUCKET }} \
             --s3-prefix "${{ env.ENVIRONMENT }}/infrastructure" \
-            --output-template-file packaged-main.yml
+            --output-template-file packaged-main.yml \
+            --region ${{ env.AWS_REGION }}
           
           # Create temporary parameter file with image URI
           TEMP_PARAM_FILE=$(mktemp)
