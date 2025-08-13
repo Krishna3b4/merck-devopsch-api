@@ -11,9 +11,6 @@ Parameters:
     Type: String
     Description: ECR image URI
 
-Conditions:
-  IsPlaceholderImage: !Equals [!Ref ImageURI, "public.ecr.aws/docker/library/hello-world:latest"]
-
   VpcId:
     Type: String
     Description: VPC ID from network stack
@@ -45,6 +42,9 @@ Conditions:
   SecretArn:
     Type: String
     Description: Secrets Manager ARN for demo user
+
+Conditions:
+  IsPlaceholderImage: !Equals [!Ref ImageURI, "public.ecr.aws/docker/library/hello-world:latest"]
 
 Resources:
   ECSCluster:

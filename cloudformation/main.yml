@@ -40,7 +40,6 @@ Parameters:
 
 Conditions:
   HasImageURI: !Not [!Equals [!Ref ImageURI, ""]]
-  IsPlaceholderImage: !Equals [!Ref ImageURI, "public.ecr.aws/docker/library/hello-world:latest"]
 
 Resources:
   # ECR Repository Stack
@@ -83,7 +82,7 @@ Resources:
   # Compute Stack
   ComputeStack:
     Type: AWS::CloudFormation::Stack
-    DependsOn: [NetworkStack, AuthStack, ECRStack, SecretsStack]
+
     Properties:
       TemplateURL: nested/compute/compute.yml
       Parameters:
@@ -104,7 +103,7 @@ Resources:
   # Monitoring Stack
   MonitoringStack:
     Type: AWS::CloudFormation::Stack
-    DependsOn: ComputeStack
+
     Properties:
       TemplateURL: nested/monitoring/monitoring.yml
       Parameters:
