@@ -113,6 +113,16 @@ jobs:
           # Set stack name with environment prefix
           STACK_NAME="${{ env.ENVIRONMENT }}-merck-devops-challenge-main"
           
+          # Debug S3 bucket info
+          echo "Using S3 bucket: ${{ secrets.CF_BUCKET }}"
+          echo "AWS Region: ${{ env.AWS_REGION }}"
+          
+          # Check if bucket exists and is accessible
+          aws s3 ls s3://${{ secrets.CF_BUCKET }}/ --region ${{ env.AWS_REGION }} || {
+            echo "S3 bucket not accessible. Creating bucket..."
+            aws s3 mb s3://${{ secrets.CF_BUCKET }} --region ${{ env.AWS_REGION }}
+          }
+          
           # Package the main template
           aws cloudformation package \
             --template-file cloudformation/main.yml \
@@ -137,7 +147,11 @@ jobs:
             --stack-name $STACK_NAME \
             --parameter-overrides file://cloudformation/parameters/${{ env.ENVIRONMENT }}.json \
             --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
-            --no-fail-on-empty-changeset
+            --no-fail-on-empty-changeset || {
+            echo "Deployment failed. Getting stack events..."
+            aws cloudformation describe-stack-events --stack-name $STACK_NAME --max-items 20
+            exit 1
+          }
           
           # Wait for stack to be completely ready
           echo "Waiting for stack deployment to complete..."
