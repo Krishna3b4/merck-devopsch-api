@@ -160,7 +160,7 @@ Resources:
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub ${Environment}-merck-devops-challenge-alb
+      Name: !Sub ${Environment}-merck-devops-alb
       Scheme: internet-facing
       Type: application
       Subnets:
@@ -172,7 +172,7 @@ Resources:
   TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub ${Environment}-merck-devops-challenge-target-group
+      Name: !Sub ${Environment}-merck-devops-tg
       Port: 8000
       Protocol: HTTP
       VpcId: !Ref VpcId
