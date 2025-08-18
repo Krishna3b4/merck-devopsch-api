@@ -58,7 +58,6 @@
 
 ### 🔐 Authentication & Authorization
 - **AWS Cognito**: Enterprise-grade user authentication
-- **JWT Tokens**: Secure token-based API access
 - **Password Policy**: Enforced complexity requirements
 - **Email Verification**: Built-in user verification
 
