@@ -6,14 +6,14 @@
 
 ## 🌟 Live Application
 
-- **🌐 Application URL**: http://d-devops-challenge-alb-415511780.us-east-1.elb.amazonaws.com
-- **📋 Health Check**: http://d-devops-challenge-alb-415511780.us-east-1.elb.amazonaws.com/health
-- **📚 API Documentation**: http://d-devops-challenge-alb-415511780.us-east-1.elb.amazonaws.com/docs
-- **📖 ReDoc**: http://d-devops-challenge-alb-415511780.us-east-1.elb.amazonaws.com/redoc
+- **🌐 Application URL**: http://d-merck-devops-alb-953090628.us-east-1.elb.amazonaws.com
+- **📋 Health Check**: http://d-merck-devops-alb-953090628.us-east-1.elb.amazonaws.com/health
+- **📚 API Documentation**: http://d-merck-devops-alb-953090628.us-east-1.elb.amazonaws.com/docs
+- **📖 ReDoc**: http://d-merck-devops-alb-953090628.us-east-1.elb.amazonaws.com/redoc
 
 ### 🔐 Demo Credentials
 - **Username**: `krishna3w4@gmail.com`
-- **Password**: `Password123!`
+- **Password**: `x4mN:PkCntlk9lU0`
 
 ## 🏗️ High-Level Architecture
 
@@ -23,8 +23,9 @@
 └─────────────────────┬───────────────────────────────────────────┘
                       │
 ┌─────────────────────┴───────────────────────────────────────────┐
-│                   Application Load Balancer                    │
+│                 Application Load Balancer                      │
 │                    (Public Subnets)                           │
+│                d-merck-devops-alb-953090628                   │
 └─────────────────────┬───────────────────────────────────────────┘
                       │
 ┌─────────────────────┴───────────────────────────────────────────┐
@@ -33,6 +34,7 @@
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐ │
 │  │   FastAPI   │  │   Cognito   │  │      CloudWatch         │ │
 │  │ Application │  │    Auth     │  │      Monitoring         │ │
+│  │  0.25 vCPU  │  │  JWT Tokens │  │    Logs & Metrics     │ │
 │  └─────────────┘  └─────────────┘  └─────────────────────────┘ │
 └─────────────────────┬───────────────────────────────────────────┘
                       │
@@ -265,10 +267,10 @@ aws cloudformation deploy \
 ### Health Monitoring
 ```bash
 # Health check endpoint
-curl http://d-devops-challenge-alb-415511780.us-east-1.elb.amazonaws.com/health
+curl http://d-merck-devops-alb-953090628.us-east-1.elb.amazonaws.com/health
 
 # Response
-{"status":"healthy","environment":"dev"}
+{"status":"healthy","environment":"d"}
 ```
 
 ## 🔧 Configuration Management
@@ -327,16 +329,16 @@ Infrastructure:
 pytest app/test_main.py -v
 
 # Integration tests
-curl -X POST http://localhost:8000/login \
+curl -X POST http://d-merck-devops-alb-953090628.us-east-1.elb.amazonaws.com/login \
   -H "Content-Type: application/json" \
-  -d '{"username":"test","password":"test"}'
+  -d '{"username":"krishna3w4@gmail.com","password":"x4mN:PkCntlk9lU0"}'
 ```
 
 ### Manual Testing
-1. **Health Check**: Verify service availability
-2. **Authentication**: Test Cognito login flow
-3. **API Endpoints**: Validate all CRUD operations
-4. **Error Handling**: Test invalid inputs and edge cases
+1. **Health Check**: http://d-merck-devops-alb-953090628.us-east-1.elb.amazonaws.com/health
+2. **Authentication**: Test Cognito login with demo credentials
+3. **API Endpoints**: Validate protected /items endpoint
+4. **Error Handling**: Test invalid credentials and unauthorized access
 
 ## 📚 Additional Resources
 
